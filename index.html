@@ -1,165 +1,104 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>縦書き原稿ページ計算アプリ</title>
-    <!-- Tailwind CSSを読み込み -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts (Inter and Noto Sans JP for Japanese characters) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        /* 基本のフォント設定 */
-        body {
-            font-family: 'Inter', 'Noto Sans JP', sans-serif;
-        }
-        /* プレビューページのスタイル */
-        .manuscript-page {
-            writing-mode: vertical-rl; /* テキストを縦書き（右から左へ）に設定 */
-            text-orientation: upright; /* 文字の向きを正立に */
-            font-family: 'Noto Sans JP', sans-serif;
-            font-size: 16px;
-            line-height: 1.8;
-            letter-spacing: 0.1em;
-            
-            /* 18行が収まるように幅を厳密に計算して設定 */
-            width: 551px;
-            /* 最大42文字が収まるように高さを再計算 */
-            height: 772px;
-            
-            border: 1px solid #d1d5db; /* ページの境界線 */
-            background-color: #ffffff;
-            white-space: pre-wrap; 
-            word-break: break-all;
-            
-            overflow: hidden;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>縦書き原稿プレビュー</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    body {
+        font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif;
+    }
+    .manuscript-page {
+        writing-mode: vertical-rl;
+        border: 1px solid #ccc;
+        padding: 20px;
+        margin: 10px;
+        box-sizing: border-box;
+        font-size: 16px;
+        line-height: 1.8;
+        letter-spacing: 0.1em;
+        width: 551px;
+        height: 754px;
+        overflow: hidden;
+        white-space: pre-wrap;
+        flex-shrink: 0;
+    }
+    #preview-area {
+        display: flex;
+        flex-wrap: wrap-reverse;
+        justify-content: flex-end;
+    }
+</style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
-    <div class="w-full max-w-7xl mx-auto bg-white rounded-2xl shadow-lg p-6 sm:p-8">
-        <div class="text-center mb-6">
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">縦書き原稿ページ計算アプリ</h1>
-            <p class="text-gray-500 mt-2">テキストを貼り付けて、18行×41文字の縦書きでのページ数を確認します。</p>
-        </div>
-        <!-- 入力エリア -->
-        <div class="mb-6">
-            <textarea id="text-input" class="w-full h-48 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200" placeholder="ここにテキストを貼り付けてください..."></textarea>
-        </div>
-        <!-- ボタンと結果表示 -->
-        <div class="flex flex-col sm:flex-row items-center justify-between mb-8">
-            <button id="calculate-btn" class="w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105 mb-4 sm:mb-0">
-                計算する
-            </button>
-            <div id="result" class="text-xl sm:text-2xl font-bold text-gray-700 bg-indigo-50 p-3 rounded-lg">
-                ページ数: 0 ページ
+<body class="bg-gray-100 p-8">
+    <div class="container mx-auto bg-white p-6 rounded-lg shadow-lg">
+        <h1 class="text-2xl font-bold mb-4">縦書き原稿プレビュー</h1>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <textarea id="text-input" class="w-full h-96 p-4 border rounded-md" placeholder="ここにテキストを入力してください..."></textarea>
+                <button id="convert-btn" class="mt-4 w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600">変換</button>
             </div>
-        </div>
-        <!-- プレビューエリア -->
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">プレビュー</h2>
-            <div id="preview-area" class="bg-gray-50 p-4 sm:p-6 rounded-lg min-h-[20rem] flex flex-wrap flex-row-reverse justify-center gap-6">
-                <!-- プレビューページが追加される -->
+            <div>
+                <div id="result" class="mb-4 text-lg font-semibold"></div>
+                <div id="preview-container" class="border p-4 h-96 overflow-auto bg-gray-50 rounded-md">
+                    <div id="preview-area" class="flex flex-row-reverse flex-wrap justify-end">
+                        </div>
+                </div>
             </div>
         </div>
     </div>
+
     <script>
-        // 要素の取得
-        const textInput = document.getElementById('text-input');
-        const calculateBtn = document.getElementById('calculate-btn');
-        const resultDiv = document.getElementById('result');
-        const previewArea = document.getElementById('preview-area');
+        document.getElementById('convert-btn').addEventListener('click', updatePreview);
 
-        // 定数の設定
-        const CHARS_PER_LINE = 41; // 1行あたりの文字数
-        const MAX_CHARS_PER_LINE = 42; // 例外許容の最大文字数
-        const LINES_PER_PAGE = 18; // 1ページあたりの行数
+        function updatePreview() {
+            const text = document.getElementById('text-input').value;
+            const previewArea = document.getElementById('preview-area');
+            const resultDiv = document.getElementById('result');
+            previewArea.innerHTML = '';
 
-        function updateManuscript() {
-            const text = textInput.value.replace(/\r\n?/g, '\n');
-            const totalChars = text.length;
+            const maxLinesPerPage = 18;
+            const maxCharsPerLine = 41;
 
-            // 行分割ロジック
-            const allLines = [];
-            const paragraphs = text.split('\n');
-            paragraphs.forEach(para => {
-                if (para.length === 0) {
-                    allLines.push('');
-                    return;
+            if (!text) {
+                resultDiv.textContent = 'ページ数: 0ページ';
+                return;
+            }
+
+            // 【変更点】禁則処理を無効にしたシンプルな行分割ロジック
+            function splitTextIntoLines(inputText) {
+                const lines = [];
+                for (let i = 0; i < inputText.length; i += maxCharsPerLine) {
+                    lines.push(inputText.substring(i, i + maxCharsPerLine));
                 }
-                let cursor = 0;
-                while (cursor < para.length) {
-                    let end = cursor + CHARS_PER_LINE;
-                    if (end > para.length) end = para.length;
+                return lines;
+            }
 
-                    let line = para.substring(cursor, end);
-
-                    // 【特例1】末尾が「「」なら1文字戻す
-                    if (line.endsWith('「')) {
-                        line = para.substring(cursor, end - 1);
-                        end -= 1;
-                    }
-                    // 【特例2】次の文字が「。」または「、」なら取り込む
-                    else if (para[end] === '。' || para[end] === '、') {
-                        if (end + 1 - cursor <= MAX_CHARS_PER_LINE) {
-                            line = para.substring(cursor, end + 1);
-                            end += 1;
-                        }
-                    }
-                    // 【特例3】もし全体が42文字以内なら分割せず全部収める
-                    else {
-                        const lookahead = para.substring(cursor, cursor + MAX_CHARS_PER_LINE);
-                        if (lookahead.length <= MAX_CHARS_PER_LINE) {
-                            line = lookahead;
-                            end = cursor + lookahead.length;
-                        }
-                    }
-
-                    allLines.push(line);
-                    cursor = end;
+            const paragraphs = text.split('\n');
+            let allLines = [];
+            paragraphs.forEach(p => {
+                if (p === '') {
+                    allLines.push('');
+                } else {
+                    allLines = allLines.concat(splitTextIntoLines(p));
                 }
             });
 
-            // ページ数計算
-            const totalLines = allLines.length;
-            const totalPages = totalLines > 0 ? Math.ceil(totalLines / LINES_PER_PAGE) : 1;
 
-            resultDiv.textContent = `ページ数: ${totalPages} ページ (総文字数: ${totalChars})`;
+            const totalPages = Math.ceil(allLines.length / maxLinesPerPage);
+            resultDiv.textContent = `ページ数: ${totalPages}ページ`;
 
-            // プレビュー生成
-            previewArea.innerHTML = '';
             for (let i = 0; i < totalPages; i++) {
-                const startLineIndex = i * LINES_PER_PAGE;
-                const endLineIndex = startLineIndex + LINES_PER_PAGE;
-                
-                const pageLines = allLines.slice(startLineIndex, endLineIndex);
-                const pageText = pageLines.join('\n');
-                
-                const pageElement = document.createElement('div');
-                pageElement.className = 'manuscript-page p-4 rounded-md shadow-sm';
-                
-                pageElement.textContent = pageText.length > 0 ? pageText : ' '; 
-                
-                previewArea.appendChild(pageElement);
-            }
-
-            // 入力がゼロのときは空ページを1枚だけ
-            if (totalPages === 1 && totalLines === 0) {
-                previewArea.innerHTML = '';
-                const pageElement = document.createElement('div');
-                pageElement.className = 'manuscript-page p-4 rounded-md shadow-sm';
-                pageElement.textContent = ' ';
-                previewArea.appendChild(pageElement);
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'manuscript-page';
+                const startLine = i * maxLinesPerPage;
+                const endLine = startLine + maxLinesPerPage;
+                const pageLines = allLines.slice(startLine, endLine);
+                pageDiv.textContent = pageLines.join('\n');
+                previewArea.appendChild(pageDiv);
             }
         }
-
-        // イベントバインド
-        calculateBtn.addEventListener('click', updateManuscript);
-
-        // 初期表示
-        updateManuscript();
     </script>
 </body>
 </html>
